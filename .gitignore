@@ -1,0 +1,8 @@
+config.js
+build/*
+node_modules/*
+*.css
+repositories/*
+.lock-wscript
+.*~
+.*.kate-swp
