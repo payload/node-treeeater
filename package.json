@@ -6,14 +6,17 @@
     "url": ""
   },
   "engines": {
-    "node": "~v0.4.7"
+    "node": ">= 0.4.7"
   },
   "dependencies": {
     "bufferstream": ">= 0.0.3"
   },
   "devDependencies": {},
   "scripts": {
-    "preinstall": "node-waf clean || true; node-waf configure build"
+    "preinstall": "node-waf configure build",
+    "install": "node-waf build",
+    "update": "node-waf build",
+    "test": "cd build/default/ && node test.js"
   }
 }
 
