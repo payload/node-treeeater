@@ -6,15 +6,20 @@ assert_same = (a, b, msg) ->
     else console.log "#{msg} okay"
 
 test_git = () ->
-
     n = 0
-    git = new treeeater.Git
-    git.call 'git', ['log'], (line, end) ->
-        return unless line
-        n += line.split('\n').length - 1
-    assert_same(n, 0, "line output")
-
-    #git.commits (commit) -> console.log 1, commit
+    repo = new treeeater.Repo
+    result = {}
+    check = ->
+        if result.a and result.b
+            assert_same result.a, result.b, 'serving and counting commits'
+    commits = repo.commits (commits) ->
+        result.a = commits.length
+        check()
+    commits.on 'commit', (commit) ->
+        n += 1
+    commits.on 'end', ->
+        result.b = n
+        check()
 
 test_git()
 
