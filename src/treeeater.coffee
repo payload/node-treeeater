@@ -5,53 +5,54 @@ EventEmitter = (require 'events').EventEmitter
 debug_log = (what...) ->
     console.log.apply console.log, ['DEBUG:'].concat what
 
-class CommitsParser
-    re =
-        commit   : /^commit ([0-9a-z]+)/
-        tree     : /^tree ([0-9a-z]+)/
-        parent   : /^parent ([0-9a-z]+)/
-        author   : /^author (\S+) (\S+) (\d+) (\S+)/
-        committer: /^committer (\S+) (\S+) (\d+) (\S+)/
-        message  : /^\s\s\s\s(.*)/
-        change   : /^:(\S+) (\S+) ([0-9a-z]+) ([0-9a-z]+) (.)\t(.+)/
-        numstat  : /^([0-9-]+)\s+([0-9-]+)\s+(.+)/
-
-    constructor: () -> @commit = null
-
-    end: () => @commit
-
+# see CommitsParser to see an example of the usage
+# a possible error in usage is a wrong regex at index 0 which results surely in
+# a TypeError cause of setting a property of null
+class ItemsParser
+    constructor: (@regexes) ->
+        @item = null
+    end: () => @item unless @no_match
     line: (line) =>
-        #debug_log "CommitsParser.line:", line
-        ret = null
-        if match = line.match re.commit
-            ret = @commit
-            @commit =
-                parents : []
-                message : []
-                changes : {}
-                numstats: {}
-            @commit.commit = match[1]
-        else if match = line.match re.tree
-            @commit.tree = match[1]
-        else if match = line.match re.parent
-            @commit.parents.push match[1]
-        else if match = line.match re.author
-            [ _, name, email, time, timezone ] = match
-            @commit.author = { name, email, time, timezone }
-        else if match = line.match re.committer
-            [ _, name, email, time, timezone ] = match
-            @commit.committer = { name, email, time, timezone }
-        else if match = line.match re.message
-            @commit.message.push match[1]
-        else if match = line.match re.change
-            [ _, modea, modeb, hasha, hashb, change, path ] = match
-            @commit.changes[path] = { modea, modeb, hasha, hashb, change }
-        else if match = line.match re.numstat
-            [ _, plus, minus, path ] = match
-            @commit.numstats[path] = { plus, minus }
-        else if line
-            debug_log "CommitsParser.line - unknown line:", line
-        ret
+        return_item = null
+        matched = false
+        for [ regex, func ], i in @regexes
+            match = line.match regex
+            if match
+                matched = true
+                if i == 0
+                    return_item = @item
+                    @item = {}
+                func.call this, match
+        unless matched
+            debug_log "ItemsParser.line - unknown line:", line
+        return_item
+
+class CommitsParser extends ItemsParser
+    constructor: ->
+        super [
+            [/^commit ([0-9a-z]+)/, (match) ->
+                @item.commit = match[1]]
+            [/^tree ([0-9a-z]+)/, (match) ->
+                @item.tree = match[1]]
+            [/^parent ([0-9a-z]+)/, (match) ->
+                (@item.parents ?= []).push match[1]]
+            [/^author (\S+) (\S+) (\d+) (\S+)/, (match) ->
+                [ _, name, email, time, timezone ] = match
+                @item.author = { name, email, time, timezone }]
+            [/^committer (\S+) (\S+) (\d+) (\S+)/, (match) ->
+                [ _, name, email, time, timezone ] = match
+                @item.committer = { name, email, time, timezone }]
+            [/^\s\s\s\s(.*)/, (match) ->
+                (@item.message ?= []).push match[1]]
+            [/^:(\S+) (\S+) ([0-9a-z]+) ([0-9a-z]+) (.)\t(.+)/, (match) ->
+                [ _, modea, modeb, hasha, hashb, change, path ] = match
+                (@item.changes ?= {})[path] = { modea, modeb, hasha, hashb, change }]
+            [/^([0-9-]+)\s+([0-9-]+)\s+(.+)/, (match) ->
+                [ _, plus, minus, path ] = match
+                (@item.numstats ?= {})[path] = { plus, minus }]
+            [/^$/, ->]
+        ]
+
 
 class Git
     # commits             # serves commits as parsed from git log
