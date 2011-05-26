@@ -70,21 +70,22 @@ class Git
             'no-color': null
             'no-abbrev': null
         (opts[k]=v) for k, v of options
-        # output
+        @parsed_output 'commit', new CommitsParser, cb, => @call 'log', opts
+
+    parsed_output: (name, parser, cb, call) =>
         ee = new EventEmitter
-        commits_parser = new CommitsParser
-        log = @call 'log', opts
-        log.on 'line', (l) ->
-            commit = commits_parser.line l
-            (ee.emit 'commit', commit) if commit
-        log.on 'end', ->
-            commit = commits_parser.end()
-            (ee.emit 'commit', commit) if commit
+        lines = call()
+        lines.on 'line', (l) ->
+            item = parser.line l
+            (ee.emit name, item) if item
+        lines.on 'end', ->
+            item = parser.end()
+            (ee.emit name, item) if item
             ee.emit 'end'
         if cb
-            commits = []
-            ee.on 'commit', (c) -> commits.push c
-            ee.on 'end', -> cb commits
+            items = []
+            ee.on name, (item) -> items.push item
+            ee.on 'end', -> cb items
         ee
 
     opts2args: (opts) =>
