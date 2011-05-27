@@ -3,7 +3,7 @@ BufferStream = require 'bufferstream'
 EventEmitter = (require 'events').EventEmitter
 
 debug_log = (what...) ->
-    console.log.apply console.log, ['DEBUG:'].concat what
+    console.log.apply console.log, ['DEBUG:'].concat (""+x for x in what)
 
 # see CommitsParser to see an example of the usage
 # a possible error in usage is a wrong regex at index 0 which results surely in
@@ -149,6 +149,9 @@ class Git
             ee.on 'line', (l) -> text.push l
             ee.on 'end', -> cb text.join("\n")
         ee
+
+    version: (cb) =>
+        @spawn 'git', ['--version'], {}, cb
 
 class Repo
     constructor: (args) ->
