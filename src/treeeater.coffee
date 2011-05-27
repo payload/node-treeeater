@@ -1,6 +1,7 @@
 { spawn } = require 'child_process'
 BufferStream = require 'bufferstream'
 EventEmitter = (require 'events').EventEmitter
+git_commands = (require 'git-commands').commands
 
 debug_log = (what...) ->
     console.log.apply console.log, ['DEBUG:'].concat (""+x for x in what)
@@ -55,23 +56,10 @@ class CommitsParser extends ItemsParser
 
 
 class Git
-    # commits             # serves commits as parsed from git log
-    # [options]: object
-    # [cb]: ([object]) -> # gets all the commits
-    # returns: EventEmitter commit: object, end
-    commits: (options, cb) =>
-        options or= {}
-        if typeof options is 'function' and not cb?
-            cb = options
-            options = {}
-        opts =
-            raw: null
-            pretty: 'raw'
-            numstat: null
-            'no-color': null
-            'no-abbrev': null
-        (opts[k]=v) for k, v of options
-        @parsed_output 'commit', new CommitsParser, cb, => @call 'log', opts
+    constructor: () ->
+        for cmd in git_commands
+            this[cmd] = ((cmd) => (opts..., cb) =>
+                @spawn 'git', cmd, opts, cb)(cmd)
 
     parsed_output: (name, parser, cb, call) =>
         ee = new EventEmitter
@@ -103,35 +91,43 @@ class Git
                     "-#{k}"
             else "--"
 
-    # call              # calls git
-    # cmd: string       # which git command
-    # [options]: object # which maps somehow to the shell or spawn options
-    # [cb]: (string) -> # gets all the text
-    # return: EventEmitter line: string, end
-    call: (cmd, options, cb) =>
-        # optional args
-        options or= {}
-        if typeof options is 'function' and not cb?
-            cb = options
-            options = {}
-        args = [cmd].concat @opts2args(options)
-        @spawn 'git', args, cb
-
     # spawn             # mostly like child_process.spawn
     # command: string
     # args: [string]
     # [options]: string
     # [cb]: (string) -> # gets all the text
     # returns: EventEmitter line: string, end
-    spawn: (command, args, options, cb) =>
+    spawn: (command, opts..., cb) =>
         # optional args
-        options or= {}
-        if typeof options == 'function'
-            cb = options
-            options = {}
+        if typeof cb != 'function'
+            opts.push cb
+            cb = undefined
+        # split into args and filtered options
+        args = []
+        options = {}
+        i = 0 # i am pushing stuff into opts inside the loop, thats why i need i
+        while i < opts.length
+            arg = opts[i]
+            # to mix single strings and arrays in the arguments
+            if Array.isArray(arg)
+                opts.push.apply opts, arg # thats the pushing i is needed for
+            else if typeof arg == 'object'
+                # the options filter
+                for k in ['cwd', 'env', 'customFds', 'setsid']
+                    if arg[k]
+                        options[k] = arg[k]
+                        delete arg[k]
+                args = args.concat @opts2args(arg)
+            else if typeof arg is 'string'
+                args.push arg
+            else unless typeof arg is 'undefined'
+                throw Error "wrong arg #{arg} in opts"
+            i++
         # spawn and pipe through BufferStream
         buffer = new BufferStream
-        debug_log 'spawn:', command, args
+        debug_log 'spawn:',
+            command+' '+args.join(' '),
+            ["#{k}: #{v}" for k,v of options]
         child = spawn command, args, options
         child.stderr.on 'data', debug_log
         process.once 'exit', child.kill
@@ -150,16 +146,33 @@ class Git
             ee.on 'end', -> cb text.join("\n")
         ee
 
-    version: (cb) =>
-        @spawn 'git', ['--version'], {}, cb
+    version: (opts..., cb) =>
+        @spawn 'git', '--version', opts, cb
+
+    # commits             # serves commits as parsed from git log
+    # [options]: object
+    # [cb]: ([object]) -> # gets all the commits
+    # returns: EventEmitter commit: object, end
+    commits: (opts..., cb) =>
+        console.log opts, cb
+        if typeof cb != 'function'
+            opts.push cb
+            cb = undefined
+        (opts ?= []).push
+            raw: null
+            pretty: 'raw'
+            numstat: null
+            'no-color': null
+            'no-abbrev': null
+        @parsed_output 'commit', new CommitsParser, cb, => @log opts
 
 class Repo
     constructor: (args) ->
         { @path, @bare } = args if args
         @git = new Git
 
-    commits: (options, cb) ->
-        @git.commits options, cb
+    commits: (opts..., cb) ->
+        @git.commits opts, cb
 
 exports.Git = Git
 exports.Repo = Repo

@@ -1,4 +1,4 @@
-treeeater = require 'treeeater'
+git = require 'treeeater'
 
 assert_same = (a, b, msg) ->
     if a != b
@@ -7,7 +7,7 @@ assert_same = (a, b, msg) ->
 
 test_git = () ->
     n = 0
-    repo = new treeeater.Repo
+    repo = new git.Repo
     result = {}
     check = ->
         if result.a and result.b
@@ -20,6 +20,11 @@ test_git = () ->
     commits.on 'end', ->
         result.b = n
         check()
+
+    git = new git.Git
+    log = git.log {'no-color': null}, (t) ->
+        if t.length > 0
+            console.log "git log okay"
 
 test_git()
 
