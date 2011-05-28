@@ -17,7 +17,7 @@ test_commits = () ->
         check()
     commits.on 'commit', (commit) ->
         n += 1
-    commits.on 'end', ->
+    commits.on 'close', ->
         result.b = n
         check()
 
@@ -25,6 +25,7 @@ test_tree = () ->
     git = new Git cwd: '../..' # TODO path to a test repo
     git.tree 'HEAD', (trees) ->
         git.tree_hierachy(trees) # TODO not really a test ^^
+        console.log "tree hierachy okay"
 
 test_commits()
 test_tree()

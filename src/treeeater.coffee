@@ -76,14 +76,14 @@ class Git
         lines.on 'line', (l) ->
             item = parser.line l
             (ee.emit name, item) if item
-        lines.on 'end', ->
+        lines.on 'close', ->
             item = parser.end()
             (ee.emit name, item) if item
-            ee.emit 'end'
+            ee.emit 'close'
         if cb
             items = []
             ee.on name, (item) -> items.push item
-            ee.on 'end', -> cb items
+            ee.on 'close', -> cb items
         ee
 
     opts2args: (opts) =>
@@ -102,8 +102,9 @@ class Git
 
     # spawn             # mostly like child_process.spawn
     # command: string
-    # args: [string]
-    # [options]: string
+    # opts: [...]       # command options and special options like
+                        # documented in child_process.spawn#options
+                        # or { chunked: true } to disable line splits
     # [cb]: (string) -> # gets all the text
     # returns: EventEmitter line: string, end
     spawn: (command, opts..., cb) =>
@@ -118,8 +119,8 @@ class Git
             if Array.isArray(arg)
                 opts.push.apply opts, arg # thats the pushing i is needed for
             else if typeof arg == 'object'
-                # the options filter
-                for k in ['cwd', 'env', 'customFds', 'setsid']
+                # the options filter for special options (below is here)
+                for k in ['cwd', 'env', 'customFds', 'setsid', 'chunked']
                     if arg[k]
                         options[k] = arg[k]
                         delete arg[k]
@@ -141,16 +142,16 @@ class Git
             process.removeListener 'exit', child.kill
             delete child
         child.stdout.pipe buffer
-        # output via EventEmitter
-        ee = new EventEmitter
-        buffer.split '\n', (l,t) -> ee.emit 'line', "#{l}"
-        buffer.on 'end', -> ee.emit 'end'
-        # optional output via callback
-        if cb
-            text = []
-            ee.on 'line', (l) -> text.push l
-            ee.on 'end', -> cb text.join("\n")
-        ee
+        # output
+        if options.chunked
+            if cb
+                buffer.on 'close', () -> cb buffer.buffer
+        else
+            if cb
+                buffer.on 'close', () -> cb buffer.buffer.toString()
+            else
+                buffer.split '\n', (l,t) -> buffer.emit 'line', l.toString()
+        buffer
 
     opts_cb: (opts, cb) =>
         opts = @opts[0..].concat(opts or [])
@@ -177,7 +178,7 @@ class Git
         @parsed_output 'commit', new CommitsParser, cb, =>
             @log opts
 
-    # tree
+    # tree # opts should contain a revision like HEAD
     # [cb]: ([object]) -> # gets all the tree objects
     # returns: EventEmitter tree: object, end
     tree: (opts..., cb) =>
@@ -214,7 +215,6 @@ class Git
             if !(n -= 1) and trees.length
                 throw "#{Path.dirname(trees[0].path)} missing #{n} #{trees.length}"
         hierachy
-
 
 exports.Git = Git
 
