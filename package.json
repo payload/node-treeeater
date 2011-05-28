@@ -1,20 +1,22 @@
 {
-  "author": "",
+  "author": "payload",
   "name": "treeeater",
   "version": "0.0.0",
+  "homepage": "https://github.com/payload/node-treeeater",
   "repository": {
-    "url": ""
+    "type": "git",
+    "url": "git://github.com/payload/node-treeeater.git"
   },
   "engines": {
     "node": ">= 0.4.7"
   },
   "dependencies": {
-    "bufferstream": ">= 0.0.3"
+    "coffee-script": ">= 1.1.1",
+    "bufferstream": ">= 0.1.2"
   },
   "devDependencies": {},
   "scripts": {
-    "preinstall": "node-waf configure build",
-    "install": "node-waf build",
+    "install": "node-waf configure build",
     "update": "node-waf build",
     "test": "cd build/default/ && node test.js"
   }
