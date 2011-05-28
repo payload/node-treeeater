@@ -29,36 +29,43 @@ class ItemsParser
         return_item
 
 class CommitsParser extends ItemsParser
-    constructor: ->
-        super [
-            [/^commit ([0-9a-z]+)/, (match) ->
-                @item.commit = match[1]]
-            [/^tree ([0-9a-z]+)/, (match) ->
-                @item.tree = match[1]]
-            [/^parent ([0-9a-z]+)/, (match) ->
-                (@item.parents ?= []).push match[1]]
-            [/^author (\S+) (\S+) (\d+) (\S+)/, (match) ->
-                [ _, name, email, time, timezone ] = match
-                @item.author = { name, email, time, timezone }]
-            [/^committer (\S+) (\S+) (\d+) (\S+)/, (match) ->
-                [ _, name, email, time, timezone ] = match
-                @item.committer = { name, email, time, timezone }]
-            [/^\s\s\s\s(.*)/, (match) ->
-                (@item.message ?= []).push match[1]]
-            [/^:(\S+) (\S+) ([0-9a-z]+) ([0-9a-z]+) (.)\t(.+)/, (match) ->
-                [ _, modea, modeb, hasha, hashb, change, path ] = match
-                (@item.changes ?= {})[path] = { modea, modeb, hasha, hashb, change }]
-            [/^([0-9-]+)\s+([0-9-]+)\s+(.+)/, (match) ->
-                [ _, plus, minus, path ] = match
-                (@item.numstats ?= {})[path] = { plus, minus }]
-            [/^$/, ->]
-        ]
+    constructor: () -> @regexes = regexes
+    regexes = [
+        [/^commit ([0-9a-z]+)/, (match) ->
+            @item.commit = match[1]]
+        [/^tree ([0-9a-z]+)/, (match) ->
+            @item.tree = match[1]]
+        [/^parent ([0-9a-z]+)/, (match) ->
+            (@item.parents ?= []).push match[1]]
+        [/^author (\S+) (\S+) (\d+) (\S+)/, (match) ->
+            [ _, name, email, time, timezone ] = match
+            @item.author = { name, email, time, timezone }]
+        [/^committer (\S+) (\S+) (\d+) (\S+)/, (match) ->
+            [ _, name, email, time, timezone ] = match
+            @item.committer = { name, email, time, timezone }]
+        [/^\s\s\s\s(.*)/, (match) ->
+            (@item.message ?= []).push match[1]]
+        [/^:(\S+) (\S+) ([0-9a-z]+) ([0-9a-z]+) (.)\t(.+)/, (match) ->
+            [ _, modea, modeb, hasha, hashb, change, path ] = match
+            (@item.changes ?= {})[path] = { modea, modeb, hasha, hashb, change }]
+        [/^([0-9-]+)\s+([0-9-]+)\s+(.+)/, (match) ->
+            [ _, plus, minus, path ] = match
+            (@item.numstats ?= {})[path] = { plus, minus }]
+        [/^$/, ->]
+    ]
 
+class TreeParser extends ItemsParser
+    constructor: () -> @regexes = regexes
+    regexes = [
+        [/(\S+) (\S+) (\S+)\s+(\S+)\s+(.+)/, (match) ->
+            [ _, mode, type, hash, size, path ] = match
+            @item = { mode, type, hash, size, path }]]
 
 class Git
     constructor: () ->
         for cmd in git_commands
-            this[cmd] = ((cmd) => (opts..., cb) =>
+            func = cmd.replace /-/g, '_'
+            this[func] = ((cmd) => (opts..., cb) =>
                 @spawn 'git', cmd, opts, cb)(cmd)
 
     parsed_output: (name, parser, cb, call) =>
@@ -150,11 +157,9 @@ class Git
         @spawn 'git', '--version', opts, cb
 
     # commits             # serves commits as parsed from git log
-    # [options]: object
     # [cb]: ([object]) -> # gets all the commits
     # returns: EventEmitter commit: object, end
     commits: (opts..., cb) =>
-        console.log opts, cb
         if typeof cb != 'function'
             opts.push cb
             cb = undefined
@@ -164,15 +169,29 @@ class Git
             numstat: null
             'no-color': null
             'no-abbrev': null
-        @parsed_output 'commit', new CommitsParser, cb, => @log opts
+        @parsed_output 'commit', new CommitsParser, cb, =>
+            @log opts
+
+    # tree
+    # [cb]: ([object]) -> # gets all the tree objects
+    # returns: EventEmitter tree: object, end
+    tree: (opts..., cb) =>
+        if typeof cb != 'function'
+            opts.push cb
+            cb = undefined
+        @parsed_output 'tree', new TreeParser, cb, =>
+            @ls_tree '-l', '-r', '-t', opts
 
 class Repo
     constructor: (args) ->
         { @path, @bare } = args if args
         @git = new Git
 
-    commits: (opts..., cb) ->
+    commits: (opts..., cb) =>
         @git.commits opts, cb
+
+    tree: (opts..., cb) =>
+        @git.tree opts, 'HEAD', cb
 
 exports.Git = Git
 exports.Repo = Repo

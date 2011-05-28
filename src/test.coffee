@@ -3,11 +3,11 @@ git = require 'treeeater'
 assert_same = (a, b, msg) ->
     if a != b
         console.log "fail at #{msg} cause #{a} != #{b}"
-    else console.log "#{msg} okay"
+    else console.log "#{msg} with a=#{a} and b=#{b} okay"
 
-test_git = () ->
+test_repo_commits = () ->
     n = 0
-    repo = new git.Repo
+    repo = new git.Repo # TODO path to a test repo
     result = {}
     check = ->
         if result.a and result.b
@@ -21,10 +21,12 @@ test_git = () ->
         result.b = n
         check()
 
-    git = new git.Git
-    log = git.log {'no-color': null}, (t) ->
-        if t.length > 0
-            console.log "git log okay"
+test_git = () ->
+    repo = new git.Repo # TODO path to a test repo
+    tree = repo.tree {cwd: '../..'}
+    tree.on 'tree', (tree) ->
+        console.log tree
 
+test_repo_commits()
 test_git()
 
