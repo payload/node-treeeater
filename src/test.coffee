@@ -1,5 +1,7 @@
 Git = (require 'treeeater').Git
 
+# i know my tests are no tests. nor good, not complete neither helpfull :P
+
 assert_same = (a, b, msg) ->
     if a != b
         console.log "fail at #{msg} cause #{a} != #{b}"
