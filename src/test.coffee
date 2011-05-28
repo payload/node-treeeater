@@ -1,4 +1,4 @@
-Git = (require 'treeeater').Git
+Git = require 'treeeater'
 
 # i know my tests are no tests. nor good, not complete neither helpfull :P
 

@@ -255,5 +255,5 @@ class Git
             # TODO when the parser supports it: --full-index
             @diff 'no-color': null, opts
 
-exports.Git = Git
+module.exports = Git
 

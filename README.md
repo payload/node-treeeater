@@ -31,7 +31,7 @@
 
   * put command line arguments as `key: value` pairs or strings into your call
 
-        Git = require('treeeater').Git
+        Git = require 'treeeater'
         # an option on construction is default for all calls
         git = new Git cwd: 'parrot'
         # ~/parrot$ git log -1 --pretty=raw HEAD^^
