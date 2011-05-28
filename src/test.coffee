@@ -33,7 +33,14 @@ test_cat = () ->
         return console.log "cat okay" if blob.length
         console.log "fail at cat cause no content"
 
+test_diffs = () ->
+    git = new Git cwd: '../..'
+    git.diffs 'HEAD^..HEAD', (diffs) ->
+        return console.log "diffs okay" if diffs.length
+        console.log "fail at diffs cause no elements"
+
 test_commits()
 test_tree()
 test_cat()
+test_diffs()
 

@@ -46,9 +46,9 @@ class CommitsParser extends ItemsParser
             @item.committer = { name, email, time, timezone }]
         [/^\s\s\s\s(.*)/, (match) ->
             (@item.message ?= []).push match[1]]
-        [/^:(\S+) (\S+) ([0-9a-z]+) ([0-9a-z]+) (.)\t(.+)/, (match) ->
-            [ _, modea, modeb, hasha, hashb, change, path ] = match
-            (@item.changes ?= {})[path] = { modea, modeb, hasha, hashb, change }]
+        [/^:(\S+) (\S+) ([0-9a-z]+) ([0-9a-z]+) (.+)\t(.+)/, (match) ->
+            [ _, modea, modeb, shaa, shab, status, path ] = match
+            (@item.changes ?= {})[path] = { modea, modeb, shaa, shab, status }]
         [/^([0-9-]+)\s+([0-9-]+)\s+(.+)/, (match) ->
             [ _, plus, minus, path ] = match
             (@item.numstats ?= {})[path] = { plus, minus }]
@@ -58,9 +58,25 @@ class CommitsParser extends ItemsParser
 class TreeParser extends ItemsParser
     constructor: () -> @regexes = regexes
     regexes = [
-        [/(\S+) (\S+) (\S+)\s+(\S+)\s+(.+)/, (match) ->
-            [ _, mode, type, hash, size, path ] = match
-            @item = { mode, type, hash, size, path }]]
+        [/^(\S+) (\S+) (\S+)\s+(\S+)\s+(.+)/, (match) ->
+            [ _, mode, type, sha, size, path ] = match
+            @item = { mode, type, sha, size, path }]]
+
+class DiffsParser extends ItemsParser
+    constructor: () -> @regexes = regexes
+    set_by_list: (names..., match) ->
+        for name, i in names
+            @item[name] = match[i] if name
+    regexes = [
+        [/^diff (.+) a\/(.+) b\/(.+)/, (match) ->
+            @set_by_list null, 'type', 'src', 'dst', match]
+        [/^@.*/, (match) ->
+            (@item.chunks ?= []).push { head: match[0], lines: [] }]
+        [/^[ -+](.*)/, (match) ->
+            # "?" is a fix for "+++"/"---" lines in the header
+            @item.chunks?[-1..][0].lines.push match[1]]
+        [//, ->]
+    ]
 
 class Git
     constructor: (@opts...) ->
@@ -169,14 +185,13 @@ class Git
     # returns: EventEmitter commit: object, end
     commits: (opts..., cb) =>
         [opts, cb] = @opts_cb opts, cb
-        opts.push
-            raw: null
-            pretty: 'raw'
-            numstat: null
-            'no-color': null
-            'no-abbrev': null
         @parsed_output 'commit', new CommitsParser, cb, =>
-            @log opts
+            @log opts,
+                raw: null
+                pretty: 'raw'
+                numstat: null
+                'no-color': null
+                'no-abbrev': null
 
     # tree # opts should contain a revision like HEAD
     # [cb]: ([object]) -> # gets all the tree objects
@@ -222,6 +237,12 @@ class Git
     cat: (path, revision..., cb) =>
         revision = revision[0] or 'HEAD'
         @cat_file '-p', "#{revision}:#{path}", cb
+
+    diffs: (opts..., cb) =>
+        [opts, cb] = @opts_cb opts, cb
+        @parsed_output 'diff', new DiffsParser, cb, =>
+            # TODO when the parser supports it: --full-index
+            @diff 'no-color': null, opts
 
 exports.Git = Git
 
