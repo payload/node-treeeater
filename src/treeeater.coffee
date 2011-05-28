@@ -2,6 +2,7 @@
 BufferStream = require 'bufferstream'
 EventEmitter = (require 'events').EventEmitter
 git_commands = (require 'git-commands').commands
+Path = require 'path'
 
 debug_log = (what...) ->
     console.log.apply console.log, ['DEBUG:'].concat (""+x for x in what)
@@ -62,10 +63,11 @@ class TreeParser extends ItemsParser
             @item = { mode, type, hash, size, path }]]
 
 class Git
-    constructor: () ->
+    constructor: (@opts...) ->
         for cmd in git_commands
             func = cmd.replace /-/g, '_'
             this[func] = ((cmd) => (opts..., cb) =>
+                [opts, cb] = @opts_cb opts, cb
                 @spawn 'git', cmd, opts, cb)(cmd)
 
     parsed_output: (name, parser, cb, call) =>
@@ -105,10 +107,7 @@ class Git
     # [cb]: (string) -> # gets all the text
     # returns: EventEmitter line: string, end
     spawn: (command, opts..., cb) =>
-        # optional args
-        if typeof cb != 'function'
-            opts.push cb
-            cb = undefined
+        [opts, cb] = @opts_cb opts, cb
         # split into args and filtered options
         args = []
         options = {}
@@ -153,17 +152,23 @@ class Git
             ee.on 'end', -> cb text.join("\n")
         ee
 
+    opts_cb: (opts, cb) =>
+        opts = @opts[0..].concat(opts or [])
+        if typeof cb != 'function'
+            opts.push cb
+            cb = undefined
+        [opts, cb]
+
     version: (opts..., cb) =>
+        [opts, cb] = @opts_cb opts, cb
         @spawn 'git', '--version', opts, cb
 
     # commits             # serves commits as parsed from git log
     # [cb]: ([object]) -> # gets all the commits
     # returns: EventEmitter commit: object, end
     commits: (opts..., cb) =>
-        if typeof cb != 'function'
-            opts.push cb
-            cb = undefined
-        (opts ?= []).push
+        [opts, cb] = @opts_cb opts, cb
+        opts.push
             raw: null
             pretty: 'raw'
             numstat: null
@@ -176,23 +181,40 @@ class Git
     # [cb]: ([object]) -> # gets all the tree objects
     # returns: EventEmitter tree: object, end
     tree: (opts..., cb) =>
-        if typeof cb != 'function'
-            opts.push cb
-            cb = undefined
+        [opts, cb] = @opts_cb opts, cb
         @parsed_output 'tree', new TreeParser, cb, =>
             @ls_tree '-l', '-r', '-t', opts
 
-class Repo
-    constructor: (args) ->
-        { @path, @bare } = args if args
-        @git = new Git
+    # tree_hierachy
+    # transforms the output of @tree into a correct tree hierachy
+    tree_hierachy: (trees) =>
+        trees = trees[0..]
+        path_tree_map = {}
+        hierachy = []
+        n = trees.length * 2
+        while trees.length
+            obj = trees.pop()
+            if obj.type == 'tree'
+                # so you can array-iterate of a tree object to get its contents
+                tree = []
+                tree[k] = v for k, v of obj
+                obj = tree
+                # a tree is put into path_tree_map for easy lookup
+                path_tree_map[tree.path] = tree
+            dirname = Path.dirname obj.path
+            if dirname == '.' # push into root directory
+                hierachy.push obj
+            else if dirname of path_tree_map # push into some directory
+                path_tree_map[dirname].push obj
+            else # queue it back so the needed directory is there next time
+                trees = [obj].concat trees
+            # if the needed directory is not there next time,
+            # we are in an infinite loop, so we through an error after we have
+            # seen too much ^^
+            if !(n -= 1) and trees.length
+                throw "#{Path.dirname(trees[0].path)} missing #{n} #{trees.length}"
+        hierachy
 
-    commits: (opts..., cb) =>
-        @git.commits opts, cb
-
-    tree: (opts..., cb) =>
-        @git.tree opts, 'HEAD', cb
 
 exports.Git = Git
-exports.Repo = Repo
 

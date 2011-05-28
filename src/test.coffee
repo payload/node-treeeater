@@ -1,18 +1,18 @@
-git = require 'treeeater'
+Git = (require 'treeeater').Git
 
 assert_same = (a, b, msg) ->
     if a != b
         console.log "fail at #{msg} cause #{a} != #{b}"
     else console.log "#{msg} with a=#{a} and b=#{b} okay"
 
-test_repo_commits = () ->
+test_commits = () ->
     n = 0
-    repo = new git.Repo # TODO path to a test repo
+    git = new Git cwd: '../..' # TODO path to a test repo
     result = {}
     check = ->
         if result.a and result.b
             assert_same result.a, result.b, 'serving and counting commits'
-    commits = repo.commits (commits) ->
+    commits = git.commits (commits) ->
         result.a = commits.length
         check()
     commits.on 'commit', (commit) ->
@@ -21,12 +21,11 @@ test_repo_commits = () ->
         result.b = n
         check()
 
-test_git = () ->
-    repo = new git.Repo # TODO path to a test repo
-    tree = repo.tree {cwd: '../..'}
-    tree.on 'tree', (tree) ->
-        console.log tree
+test_tree = () ->
+    git = new Git cwd: '../..' # TODO path to a test repo
+    git.tree 'HEAD', (trees) ->
+        git.tree_hierachy(trees) # TODO not really a test ^^
 
-test_repo_commits()
-test_git()
+test_commits()
+test_tree()
 
