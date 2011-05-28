@@ -216,5 +216,12 @@ class Git
                 throw "#{Path.dirname(trees[0].path)} missing #{n} #{trees.length}"
         hierachy
 
+    # cat                # cats the content of an blob
+    # path: string
+    # [revision]: string # defaults to HEAD
+    cat: (path, revision..., cb) =>
+        revision = revision[0] or 'HEAD'
+        @cat_file '-p', "#{revision}:#{path}", cb
+
 exports.Git = Git
 

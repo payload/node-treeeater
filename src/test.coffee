@@ -27,6 +27,13 @@ test_tree = () ->
         git.tree_hierachy(trees) # TODO not really a test ^^
         console.log "tree hierachy okay"
 
+test_cat = () ->
+    git = new Git cwd: '../..'
+    git.cat 'package.json', (blob) ->
+        return console.log "cat okay" if blob.length
+        console.log "fail at cat cause no content"
+
 test_commits()
 test_tree()
+test_cat()
 
