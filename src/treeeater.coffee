@@ -84,7 +84,7 @@ class Git
             func = cmd.replace /-/g, '_'
             this[func] = ((cmd) => (opts..., cb) =>
                 [opts, cb] = @opts_cb opts, cb
-                @spawn 'git', cmd, opts, cb)(cmd)
+                @spawn 'git', c: 'color.ui=never', cmd, opts, cb)(cmd)
 
     parsed_output: (name, parser, cb, call) =>
         ee = new EventEmitter
@@ -103,18 +103,21 @@ class Git
         ee
 
     opts2args: (opts) =>
-        args = for k,v of opts
+        args = []
+        for k,v of opts
             if k.length > 1
                 if v != null
-                    "--#{k}=#{v}"
+                    args.push "--#{k}=#{v}"
                 else
-                    "--#{k}"
+                    args.push "--#{k}"
             else if k.length == 1
                 if v != null
-                    "-#{k} #{n}"
+                    args.push "-#{k}"
+                    args.push "#{v}"
                 else
-                    "-#{k}"
-            else "--"
+                    args.push "-#{k}"
+            else args.push "--"
+        args
 
     # spawn             # mostly like child_process.spawn
     # command: string
@@ -162,6 +165,8 @@ class Git
         if options.chunked
             if cb
                 buffer.on 'close', () -> cb buffer.buffer
+            else
+                buffer.disable()
         else
             if cb
                 buffer.on 'close', () -> cb buffer.buffer.toString()
@@ -231,12 +236,18 @@ class Git
                 throw "#{Path.dirname(trees[0].path)} missing #{n} #{trees.length}"
         hierachy
 
-    # cat                # cats the content of an blob
+    # cat                # cats the content of an blob as a Buffer
     # path: string
     # [revision]: string # defaults to HEAD
-    cat: (path, revision..., cb) =>
-        revision = revision[0] or 'HEAD'
-        @cat_file '-p', "#{revision}:#{path}", cb
+    cat: (treeish, opts..., cb) =>
+        if typeof treeish == 'string'
+            path = treeish
+            revision = 'HEAD'
+        else for k, v of treeish
+            path = v
+            revision = k
+        [ opts, cb ] = @opts_cb opts, cb
+        @cat_file '-p', "#{revision}:#{path}", chunked: true, cb
 
     diffs: (opts..., cb) =>
         [opts, cb] = @opts_cb opts, cb
