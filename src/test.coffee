@@ -23,9 +23,9 @@ test_commits = () ->
         result.b = n
         check()
 
-test_tree = () ->
+test_trees = () ->
     git = new Git cwd: '../..' # TODO path to a test repo
-    git.tree 'HEAD', (trees) ->
+    git.trees 'HEAD', (trees) ->
         git.tree_hierachy(trees) # TODO not really a test ^^
         console.log "tree hierachy okay"
 
@@ -42,7 +42,7 @@ test_diffs = () ->
         console.log "fail at diffs cause no elements"
 
 test_commits()
-test_tree()
+test_trees()
 test_cat()
 test_diffs()
 

@@ -55,7 +55,7 @@ class CommitsParser extends ItemsParser
         [/^$/, ->]
     ]
 
-class TreeParser extends ItemsParser
+class TreesParser extends ItemsParser
     constructor: () -> @regexes = regexes
     regexes = [
         [/^(\S+) (\S+) (\S+)\s+(\S+)\s+(.+)/, (match) ->
@@ -201,9 +201,9 @@ class Git
     # tree # opts should contain a revision like HEAD
     # [cb]: ([object]) -> # gets all the tree objects
     # returns: EventEmitter tree: object, end
-    tree: (opts..., cb) =>
+    trees: (opts..., cb) =>
         [opts, cb] = @opts_cb opts, cb
-        @parsed_output 'tree', new TreeParser, cb, =>
+        @parsed_output 'tree', new TreesParser, cb, =>
             @ls_tree '-l', '-r', '-t', opts
 
     # tree_hierachy
