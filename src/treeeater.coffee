@@ -257,6 +257,34 @@ class Git
                 throw "#{Path.dirname(trees[0].path)} missing #{n} #{trees.length}"
         hierachy
 
+    # commit_tree_hierachy      # annotates blobs with corresponding commits
+    #                             in a tree_hierachy INPLACE
+    # tree_hierachy             # the return of tree_hierachy
+    # opts...                   # @commits options
+    # [cb]: (tree_hierachy) ->  # gets the tree_hierachy
+    # returns: EventEmitter blob: object, end # emits newly annotated blob
+    commit_tree_hierachy: (tree_hierachy, opts..., cb) =>
+        [ opts, cb ] = @opts_cb opts, cb
+        todo = 0
+        blobs = {}
+        for path, blob of tree_hierachy
+            continue if blob.type != 'blob'
+            blobs[path] = blob
+            todo += 1
+        ee = new EventEmitter
+        commits = @commits opts
+        commits.on 'commit', (commit) =>
+            if todo
+                for path of commit.changes
+                    if path of blobs
+                        blobs[path].commit = commit
+                        ee.emit 'blob', blobs[path]
+                        delete blobs[path]
+                        todo -= 1
+        commits.on 'close', =>
+            ee.emit 'close'
+            cb? tree_hierachy
+
     # cat               # cats the content of an blob as a Buffer
     # treeish: path/{revision: path} # default revision is HEAD
     # opts...           # git cat-file options
