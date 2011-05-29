@@ -1,6 +1,7 @@
 {
   "author": "payload",
   "name": "treeeater",
+  "main": "./build/default/treeeater.js",
   "version": "0.0.0",
   "homepage": "https://github.com/payload/node-treeeater",
   "repository": {

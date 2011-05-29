@@ -1,14 +1,14 @@
 { spawn } = require 'child_process'
 BufferStream = require 'bufferstream'
 EventEmitter = (require 'events').EventEmitter
-git_commands = (require 'git-commands').commands
+git_commands = (require './git-commands.js').commands
 Path = require 'path'
 
 debug_log = (what...) ->
     console.log.apply console.log, ['DEBUG:'].concat (""+x for x in what)
 
 class Git
-    constructor: (@opts...) ->
+    constructor: (@opts) ->
         for cmd in git_commands
             func = cmd.replace /-/g, '_'
             this[func] = ((cmd) => (opts..., cb) =>
@@ -179,11 +179,13 @@ class Git
                 opts.push.apply opts, arg # thats the pushing i is needed for
             else if typeof arg == 'object'
                 # the options filter for special options
-                for k in special
-                    if arg[k]
-                        options[k] = arg[k]
-                        delete arg[k]
-                args = args.concat @opts2args(arg)
+                filtered = {}
+                for k, v of arg
+                    if k in special
+                        options[k] = v
+                    else
+                        filtered[k] = v
+                args = args.concat @opts2args(filtered)
             else if typeof arg is 'string'
                 args.push arg
             else unless typeof arg is 'undefined'
@@ -206,7 +208,8 @@ class Git
         @output buffer, options.chunked, options.parser, cb
 
     opts_cb: (opts, cb) =>
-        opts = @opts[0..].concat(opts or [])
+        opts ?= []
+        opts.push @opts
         if typeof cb != 'function'
             opts.push cb
             cb = undefined
