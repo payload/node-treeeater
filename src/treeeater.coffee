@@ -169,7 +169,8 @@ class Git
         # split into args and filtered options
         args = []
         options = {}
-        special = ['cwd', 'env', 'customFds', 'setsid', 'chunked', 'parser']
+        special = ['cwd', 'env', 'customFds', 'setsid', 'chunked', 'parser',
+            'caching']
         i = 0 # i am pushing stuff into opts inside the loop, thats why i need i
         while i < opts.length
             arg = opts[i]
@@ -188,11 +189,13 @@ class Git
             else unless typeof arg is 'undefined'
                 throw Error "wrong arg #{arg} in opts"
             i++
-        # spawn and pipe through BufferStream
-        buffer = new BufferStream
-        debug_log 'spawn:',
-            command+' '+args.join(' ')+'  #',
+        # cache or spawn
+        cache_key = command+' '+args.join(' ')+'  #'+
             [" #{k}: #{v}" for k,v of options]
+        # TODO cache lookup
+        # spawn and pipe through BufferStream
+        debug_log 'spawn:', cache_key
+        buffer = new BufferStream
         child = spawn command, args, options
         child.stderr.on 'data', debug_log
         process.once 'exit', child.kill
