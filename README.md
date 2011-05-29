@@ -19,11 +19,11 @@
         git.version console.log
         # git version 1.7.5.2
 
-  * or listen on _line_ or _data_ events to get it line- or chunkwise
+  * or listen on _item_ or _data_ events to get it line-, item- or chunkwise
 
         n = 0
         buffer = git.log()
-        buffer.on 'line', (line) -> console.log "#{n += 1}:", line
+        buffer.on 'item', (line) -> console.log "#{n += 1}:", line
 
         buffer = git.cat 'package.json', 'HEAD^'
         file = fs.createWriteStream("package.json.bak")
@@ -36,7 +36,7 @@
         git = new Git cwd: 'parrot'
         # ~/parrot$ git log -1 --pretty=raw HEAD^^
         log = git.log 1:null, pretty:'raw', 'HEAD^^'
-        log.on 'line', do_something_with_it
+        log.on 'item', do_something_with_it
         # change current working directory, which must exist
         git.opts.cwd = 'dead'
         # git init --bare -L .
@@ -47,7 +47,7 @@
 
         n = 0
         commits = git.commits()
-        commits.on 'commit', (commit) ->
+        commits.on 'item', (commit) ->
             if my_email is commit.author.email
                 n += 1
         commits.on 'close', ->

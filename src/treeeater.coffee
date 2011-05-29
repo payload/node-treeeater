@@ -44,13 +44,14 @@ class Git
     # returns: EventEmitter commit: object, end
     commits: (opts..., cb) =>
         [opts, cb] = @opts_cb opts, cb
-        @parsed_output 'commit', new CommitsParser, cb, =>
-            @log opts,
-                raw: null
-                pretty: 'raw'
-                numstat: null
-                'no-color': null
-                'no-abbrev': null
+        @log opts,
+            raw: null
+            pretty: 'raw'
+            numstat: null
+            'no-color': null
+            'no-abbrev': null
+            parser: new CommitsParser
+            , cb
 
     # tree                # opts should contain a revision like HEAD
     # opts...             # git ls-tree options
@@ -58,8 +59,7 @@ class Git
     # returns: EventEmitter tree: object, end
     trees: (opts..., cb) =>
         [opts, cb] = @opts_cb opts, cb
-        @parsed_output 'tree', new TreesParser, cb, =>
-            @ls_tree '-l', '-r', '-t', opts
+        @ls_tree '-l', '-r', '-t', opts, parser: new TreesParser, cb
 
     # tree_hierachy
     # transforms the output of @tree into a correct tree hierachy
@@ -118,23 +118,24 @@ class Git
         [ opts, cb ] = @opts_cb opts, cb
         todo = 0
         blobs = {}
-        for path, blob of tree_hierachy
+        for path, blob of tree_hierachy.all
             continue if blob.type != 'blob'
             blobs[path] = blob
             todo += 1
         ee = new EventEmitter
         commits = @commits opts
-        commits.on 'commit', (commit) =>
+        commits.on 'item', (commit) =>
             if todo
                 for path of commit.changes
                     if path of blobs
                         blobs[path].commit = commit
-                        ee.emit 'blob', blobs[path]
+                        ee.emit 'item', blobs[path]
                         delete blobs[path]
                         todo -= 1
         commits.on 'close', =>
             ee.emit 'close'
             cb? tree_hierachy
+        ee
 
     # cat               # cats the content of an blob as a Buffer
     # treeish: path/{revision: path} # default revision is HEAD
@@ -153,9 +154,8 @@ class Git
     # opts...           # git diff options
     diffs: (opts..., cb) =>
         [opts, cb] = @opts_cb opts, cb
-        @parsed_output 'diff', new DiffsParser, cb, =>
-            # TODO when the parser supports it: --full-index
-            @diff 'no-color': null, opts
+        # TODO when the parser supports it: --full-index
+        @diff 'no-color': null, opts, parser: new DiffsParser, cb
 
     # spawn             # mostly like child_process.spawn
     # command: string
@@ -169,6 +169,7 @@ class Git
         # split into args and filtered options
         args = []
         options = {}
+        special = ['cwd', 'env', 'customFds', 'setsid', 'chunked', 'parser']
         i = 0 # i am pushing stuff into opts inside the loop, thats why i need i
         while i < opts.length
             arg = opts[i]
@@ -176,8 +177,8 @@ class Git
             if Array.isArray(arg)
                 opts.push.apply opts, arg # thats the pushing i is needed for
             else if typeof arg == 'object'
-                # the options filter for special options (below is here)
-                for k in ['cwd', 'env', 'customFds', 'setsid', 'chunked']
+                # the options filter for special options
+                for k in special
                     if arg[k]
                         options[k] = arg[k]
                         delete arg[k]
@@ -190,8 +191,8 @@ class Git
         # spawn and pipe through BufferStream
         buffer = new BufferStream
         debug_log 'spawn:',
-            command+' '+args.join(' '),
-            ["#{k}: #{v}" for k,v of options]
+            command+' '+args.join(' ')+'  #',
+            [" #{k}: #{v}" for k,v of options]
         child = spawn command, args, options
         child.stderr.on 'data', debug_log
         process.once 'exit', child.kill
@@ -199,18 +200,7 @@ class Git
             process.removeListener 'exit', child.kill
             delete child
         child.stdout.pipe buffer
-        # output
-        if options.chunked
-            if cb
-                buffer.on 'close', () -> cb buffer.buffer
-            else
-                buffer.disable()
-        else
-            if cb
-                buffer.on 'close', () -> cb buffer.buffer.toString()
-            else
-                buffer.split '\n', (l,t) -> buffer.emit 'line', l.toString()
-        buffer
+        @output buffer, options.chunked, options.parser, cb
 
     opts_cb: (opts, cb) =>
         opts = @opts[0..].concat(opts or [])
@@ -219,21 +209,37 @@ class Git
             cb = undefined
         [opts, cb]
 
-    parsed_output: (name, parser, cb, call) =>
-        ee = new EventEmitter
-        lines = call()
-        lines.on 'line', (l) ->
-            item = parser.line l
-            (ee.emit name, item) if item
-        lines.on 'close', ->
-            item = parser.end()
-            (ee.emit name, item) if item
-            ee.emit 'close'
-        if cb
-            items = []
-            ee.on name, (item) -> items.push item
-            ee.on 'close', -> cb items
-        ee
+    output: (buffer, chunked, parser, cb) =>
+        if chunked
+            throw 'you cant use a parser in chunked mode!' if parser
+            if cb
+                buffer.on 'close', () -> cb buffer.buffer
+            else
+                buffer.disable()
+        else
+            if parser
+                # extra EventEmitter needed to circumvent emitting 'close'
+                # earlier than the last emit 'item'
+                ee = new EventEmitter
+                buffer.split '\n', (l,t) ->
+                    item = parser.line l.toString()
+                    (ee.emit 'item', item) if item
+                buffer.on 'close', ->
+                    item = parser.end()
+                    (ee.emit 'item', item) if item
+                    ee.emit 'close'
+                if cb
+                    items = []
+                    ee.on 'item', (item) -> items.push item
+                    ee.on 'close', -> cb items
+                return ee
+            else
+                buffer.split '\n', (l,t) -> buffer.emit 'item', l.toString()
+                if cb
+                    items = []
+                    buffer.on 'item', (item) -> items.push item
+                    buffer.on 'close', -> cb items
+        buffer
 
 # see CommitsParser to see an example of the usage
 # a possible error in usage is a wrong regex at index 0 which results surely in
@@ -300,7 +306,7 @@ class DiffsParser extends ItemsParser
             @set_by_list null, 'type', 'src', 'dst', match]
         [/^@.*/, (match) ->
             (@item.chunks ?= []).push { head: match[0], lines: [] }]
-        [/^[ -+](.*)/, (match) ->
+        [/^[ \-+](.*)/, (match) ->
             # "?" is a fix for "+++"/"---" lines in the header
             @item.chunks?[-1..][0].lines.push match[1]]
         [//, ->]
