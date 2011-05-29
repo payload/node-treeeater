@@ -208,27 +208,44 @@ class Git
 
     # tree_hierachy
     # transforms the output of @tree into a correct tree hierachy
+    # * the returned tree and sub-trees are array-iterable to get inside objects
+    # * the returned tree and sub-trees have .contents which
+    #   map a basename to an object
+    # * the returned tree has a .all which map the full paths of all objects
+    #   and sub-objects to the object
     tree_hierachy: (trees) =>
         trees = trees[0..]
         path_tree_map = {}
         hierachy = []
+        hierachy.contents = {}
+        hierachy.all = {}
         n = trees.length * 2
         while trees.length
             obj = trees.pop()
             if obj.type == 'tree'
                 # so you can array-iterate of a tree object to get its contents
                 tree = []
+                tree.contents = {}
                 tree[k] = v for k, v of obj
                 obj = tree
                 # a tree is put into path_tree_map for easy lookup
                 path_tree_map[tree.path] = tree
-            dirname = Path.dirname obj.path
-            if dirname == '.' # push into root directory
+            # easy access to dir- and basename
+            obj.dirname = Path.dirname obj.path
+            obj.basename = Path.basename obj.path
+            # easy lookup if you have the full path via .all
+            hierachy.all[obj.path] = obj
+            # push into root directory
+            if obj.dirname == '.'
                 hierachy.push obj
-            else if dirname of path_tree_map # push into some directory
-                path_tree_map[dirname].push obj
-            else # queue it back so the needed directory is there next time
-                trees = [obj].concat trees
+                hierachy.contents[obj.basename] = obj
+            # push into some directory
+            else if obj.dirname of path_tree_map
+                dir = path_tree_map[obj.dirname]
+                dir.push obj
+                dir.contents[obj.basename] = obj
+            # queue it back so the needed directory is there next time
+            else trees = [obj].concat trees
             # if the needed directory is not there next time,
             # we are in an infinite loop, so we through an error after we have
             # seen too much ^^
