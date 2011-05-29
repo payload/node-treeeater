@@ -279,11 +279,15 @@ class CommitsParser extends ItemsParser
         [/^parent ([0-9a-z]+)/, (match) ->
             (@item.parents ?= []).push match[1]]
         [/^author (\S+) (\S+) (\d+) (\S+)/, (match) ->
-            [ _, name, email, time, timezone ] = match
-            @item.author = { name, email, time, timezone }]
+            # TODO take timezone into account
+            [ _, name, email, secs, timezone ] = match
+            date = new Date secs * 1000
+            @item.author = { name, email, date }]
         [/^committer (\S+) (\S+) (\d+) (\S+)/, (match) ->
-            [ _, name, email, time, timezone ] = match
-            @item.committer = { name, email, time, timezone }]
+            # TODO take timezone into account
+            [ _, name, email, secs, timezone ] = match
+            date = new Date secs * 1000
+            @item.committer = { name, email, date }]
         [/^\s\s\s\s(.*)/, (match) ->
             (@item.message ?= []).push match[1]]
         [/^:(\S+) (\S+) ([0-9a-z]+) ([0-9a-z]+) (.+)\t(.+)/, (match) ->
