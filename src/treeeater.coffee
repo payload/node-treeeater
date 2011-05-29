@@ -273,7 +273,7 @@ class CommitsParser extends ItemsParser
     constructor: () -> @regexes = regexes
     regexes = [
         [/^commit ([0-9a-z]+)/, (match) ->
-            @item.commit = match[1]]
+            @item.sha = match[1]]
         [/^tree ([0-9a-z]+)/, (match) ->
             @item.tree = match[1]]
         [/^parent ([0-9a-z]+)/, (match) ->
@@ -289,7 +289,8 @@ class CommitsParser extends ItemsParser
             date = new Date secs * 1000
             @item.committer = { name, email, date }]
         [/^\s\s\s\s(.*)/, (match) ->
-            (@item.message ?= []).push match[1]]
+            @item.message = (@item.message or "") + match[1]
+            @item.short_message = @item.message[...80]]
         [/^:(\S+) (\S+) ([0-9a-z]+) ([0-9a-z]+) (.+)\t(.+)/, (match) ->
             [ _, modea, modeb, shaa, shab, status, path ] = match
             (@item.changes ?= {})[path] = { modea, modeb, shaa, shab, status }]
