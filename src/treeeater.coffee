@@ -181,11 +181,14 @@ class Git
             cb = undefined
         [opts, cb]
 
+    # version # returns the git version string
+    # opts... # git --version options
     version: (opts..., cb) =>
         [opts, cb] = @opts_cb opts, cb
         @spawn 'git', '--version', opts, cb
 
     # commits             # serves commits as parsed from git log
+    # opts...             # git log options
     # [cb]: ([object]) -> # gets all the commits
     # returns: EventEmitter commit: object, end
     commits: (opts..., cb) =>
@@ -198,7 +201,8 @@ class Git
                 'no-color': null
                 'no-abbrev': null
 
-    # tree # opts should contain a revision like HEAD
+    # tree                # opts should contain a revision like HEAD
+    # opts...             # git ls-tree options
     # [cb]: ([object]) -> # gets all the tree objects
     # returns: EventEmitter tree: object, end
     trees: (opts..., cb) =>
@@ -253,9 +257,9 @@ class Git
                 throw "#{Path.dirname(trees[0].path)} missing #{n} #{trees.length}"
         hierachy
 
-    # cat                # cats the content of an blob as a Buffer
-    # path: string
-    # [revision]: string # defaults to HEAD
+    # cat               # cats the content of an blob as a Buffer
+    # treeish: path/{revision: path} # default revision is HEAD
+    # opts...           # git cat-file options
     cat: (treeish, opts..., cb) =>
         if typeof treeish == 'string'
             path = treeish
@@ -264,8 +268,10 @@ class Git
             path = v
             revision = k
         [ opts, cb ] = @opts_cb opts, cb
-        @cat_file '-p', "#{revision}:#{path}", chunked: true, cb
+        @cat_file '-p', opts, "#{revision}:#{path}", chunked: true, cb
 
+    # diffs             # returns diff objects
+    # opts...           # git diff options
     diffs: (opts..., cb) =>
         [opts, cb] = @opts_cb opts, cb
         @parsed_output 'diff', new DiffsParser, cb, =>
