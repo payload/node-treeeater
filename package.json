@@ -1,7 +1,11 @@
 {
   "author": "payload",
   "name": "treeeater",
-  "version": "0.0.0",
+  "email": "payload@lavabit.com",
+  "description": "useing git with focus on fun or something like that!",
+  "keywords": ["git"],
+  "main": "./build/default/treeeater.js",
+  "version": "0.5.0",
   "homepage": "https://github.com/payload/node-treeeater",
   "repository": {
     "type": "git",
