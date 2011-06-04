@@ -5,13 +5,13 @@ git_commands = (require './git-commands.js').commands
 Path = require 'path'
 
 debug_log = (what...) ->
-    console.log.apply console.log, ['DEBUG:'].concat (""+x for x in what)
+    console.log 'DEBUG:', (""+x for x in what).join(' ')
 
 class Git
     constructor: (@opts) ->
         for cmd in git_commands
             func = cmd.replace /-/g, '_'
-            this[func] = do (cmd) -> (opts..., cb) =>
+            this[func] = do (cmd) => (opts..., cb) =>
                 [opts, cb] = @opts_cb opts, cb
                 @spawn 'git', c: 'color.ui=never', cmd, opts, cb
 
