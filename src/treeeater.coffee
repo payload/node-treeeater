@@ -1,4 +1,5 @@
 { spawn } = require 'child_process'
+Stream = (require 'stream').Stream
 BufferStream = require 'bufferstream'
 EventEmitter = (require 'events').EventEmitter
 git_commands = (require './git-commands.js').commands
@@ -231,7 +232,6 @@ class Git
         if chunked
             if parser
                 stream = new Stream
-                stream.setEncoding 'utf8'
                 buffer.split '\n', (l,t) ->
                     item = parser.line l.toString()
                     (stream.emit 'data', JSON.stringify(item)) if item
