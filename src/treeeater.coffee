@@ -105,7 +105,7 @@ class Git
             # we are in an infinite loop, so we through an error after we have
             # seen too much ^^
             if !(n -= 1) and trees.length
-                throw "#{Path.dirname(trees[0].path)} missing #{n} #{trees.length}"
+                throw new Error "#{Path.dirname(trees[0].path)} missing #{n} #{trees.length}"
         hierachy
 
     # commit_tree_hierachy      # annotates blobs with corresponding commits
@@ -229,7 +229,7 @@ class Git
 
     output: (buffer, chunked, parser, cb) =>
         if chunked
-            throw 'you cant use a parser in chunked mode!' if parser
+            throw new Error('you cant use a parser in chunked mode!') if parser
             if cb
                 buffer.on 'close', () -> cb buffer.buffer
             else
