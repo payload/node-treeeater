@@ -229,11 +229,26 @@ class Git
 
     output: (buffer, chunked, parser, cb) =>
         if chunked
-            throw new Error('you cant use a parser in chunked mode!') if parser
-            if cb
-                buffer.on 'close', () -> cb buffer.buffer
+            if parser
+                stream = new Stream
+                stream.setEncoding 'utf8'
+                buffer.split '\n', (l,t) ->
+                    item = parser.line l.toString()
+                    (stream.emit 'data', JSON.stringify(item)) if item
+                buffer.on 'close', ->
+                    item = parser.end()
+                    (stream.emit 'data', JSON.stringify(item)) if item
+                    stream.emit 'close'
+                #if cb
+                #    items = []
+                #    stream.on 'item', (item) -> items.push item
+                #    stream.on 'close', -> cb items
+                return stream
             else
-                buffer.disable()
+                if cb
+                    buffer.on 'close', () -> cb buffer.buffer
+                else
+                    buffer.disable()
         else
             if parser
                 # extra EventEmitter needed to circumvent emitting 'close'
