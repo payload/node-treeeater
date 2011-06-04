@@ -11,9 +11,9 @@ class Git
     constructor: (@opts) ->
         for cmd in git_commands
             func = cmd.replace /-/g, '_'
-            this[func] = ((cmd) => (opts..., cb) =>
+            this[func] = do (cmd) -> (opts..., cb) =>
                 [opts, cb] = @opts_cb opts, cb
-                @spawn 'git', c: 'color.ui=never', cmd, opts, cb)(cmd)
+                @spawn 'git', c: 'color.ui=never', cmd, opts, cb
 
     opts2args: (opts) =>
         args = []
