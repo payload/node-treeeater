@@ -175,11 +175,19 @@ class Git
         debug_log 'spawn:', cache_key
         buffer = new BufferStream
         child = spawn command, args, options
-        child.stderr.on 'data', debug_log
-        process.once 'exit', child.kill
+        child.stderr.on 'data', options.onstderr or debug_log
+
+        p = exiting: false
+        onprocess_exit = ->
+            p.exiting = true
+            child.kill()
+        process.once 'exit', onprocess_exit
         child.on 'exit', () ->
-            process.removeListener 'exit', child.kill
+            process.removeListener 'exit', onprocess_exit
             delete child
+            if !p.exiting
+                options.onchild_exit?()
+
         child.stdout.pipe buffer
         @output buffer, options.chunked, options.parser, cb
 
@@ -188,7 +196,7 @@ class Git
         args = []
         options = {}
         special = ['cwd', 'env', 'customFds', 'setsid', 'chunked', 'parser',
-            'caching']
+            'caching', 'onstderr', 'onchild_exit']
         i = 0 # i am pushing stuff into opts inside the loop, thats why i need i
         while i < opts.length
             arg = opts[i]
