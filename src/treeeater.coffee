@@ -166,6 +166,24 @@ class Git
     # returns: EventEmitter line: string, end
     spawn: (command, opts..., cb) =>
         [opts, cb] = @opts_cb opts, cb
+        [args, options] = @split_args_options opts
+        # cache or spawn
+        cache_key = command+' '+args.join(' ')+'  #'+
+            [" #{k}: #{v}" for k,v of options]
+        # TODO cache lookup
+        # spawn and pipe through BufferStream
+        debug_log 'spawn:', cache_key
+        buffer = new BufferStream
+        child = spawn command, args, options
+        child.stderr.on 'data', debug_log
+        process.once 'exit', child.kill
+        child.on 'exit', () ->
+            process.removeListener 'exit', child.kill
+            delete child
+        child.stdout.pipe buffer
+        @output buffer, options.chunked, options.parser, cb
+
+    split_args_options: (opts) =>
         # split into args and filtered options
         args = []
         options = {}
@@ -191,21 +209,7 @@ class Git
             else unless typeof arg is 'undefined'
                 throw Error "wrong arg #{arg} in opts"
             i++
-        # cache or spawn
-        cache_key = command+' '+args.join(' ')+'  #'+
-            [" #{k}: #{v}" for k,v of options]
-        # TODO cache lookup
-        # spawn and pipe through BufferStream
-        debug_log 'spawn:', cache_key
-        buffer = new BufferStream
-        child = spawn command, args, options
-        child.stderr.on 'data', debug_log
-        process.once 'exit', child.kill
-        child.on 'exit', () ->
-            process.removeListener 'exit', child.kill
-            delete child
-        child.stdout.pipe buffer
-        @output buffer, options.chunked, options.parser, cb
+        [args, options]
 
     opts_cb: (opts, cb) =>
         opts ?= []
