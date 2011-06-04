@@ -51,7 +51,7 @@ class Git
             numstat: null
             'no-color': null
             'no-abbrev': null
-            parser: new CommitsParser
+            parser: 'commit'
             , cb
 
     # tree                # opts should contain a revision like HEAD
@@ -60,7 +60,7 @@ class Git
     # returns: EventEmitter tree: object, end
     trees: (opts..., cb) =>
         [opts, cb] = @opts_cb opts, cb
-        @ls_tree '-l', '-r', '-t', opts, parser: new TreesParser, cb
+        @ls_tree '-l', '-r', '-t', opts, parser: 'tree', cb
 
     # tree_hierachy
     # transforms the output of @tree into a correct tree hierachy
@@ -156,7 +156,7 @@ class Git
     diffs: (opts..., cb) =>
         [opts, cb] = @opts_cb opts, cb
         # TODO when the parser supports it: --full-index
-        @diff 'no-color': null, opts, parser: new DiffsParser, cb
+        @diff 'no-color': null, opts, parser: 'diff', cb
 
     # spawn             # mostly like child_process.spawn
     # command: string
@@ -229,15 +229,22 @@ class Git
         [opts, cb]
 
     output: (buffer, chunked, parser, cb) =>
+        parser = new Parsers[parser] if typeof parser is 'string'
         if chunked
             if parser
                 stream = new Stream
+                first_time = yes
                 buffer.split '\n', (l,t) ->
                     item = parser.line l.toString()
-                    (stream.emit 'data', JSON.stringify(item)) if item
+                    data = ""
+                    data += "[" if first_time
+                    if item
+                        data += JSON.stringify(item) + ","
+                    (stream.emit 'data', data) if item or first_time
+                    first_time = no if first_time
                 buffer.on 'close', ->
                     item = parser.end()
-                    (stream.emit 'data', JSON.stringify(item)) if item
+                    (stream.emit 'data', JSON.stringify(item) + "]") if item
                     stream.emit 'close'
                 #if cb
                 #    items = []
@@ -349,6 +356,12 @@ class DiffsParser extends ItemsParser
             @item.chunks?[-1..][0].lines.push match[1]]
         [//, ->]
     ]
+
+Parsers =
+    item: ItemsParser
+    commit: CommitsParser
+    tree: TreesParser
+    diff: DiffsParser
 
 module.exports = Git
 
