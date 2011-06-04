@@ -105,7 +105,7 @@ class Git
             # we are in an infinite loop, so we through an error after we have
             # seen too much ^^
             if !(n -= 1) and trees.length
-                throw "#{Path.dirname(trees[0].path)} missing #{n} #{trees.length}"
+                throw new Error "#{Path.dirname(trees[0].path)} missing #{n} #{trees.length}"
         hierachy
 
     # commit_tree_hierachy      # annotates blobs with corresponding commits
@@ -166,11 +166,37 @@ class Git
     # returns: EventEmitter line: string, end
     spawn: (command, opts..., cb) =>
         [opts, cb] = @opts_cb opts, cb
+        [args, options] = @split_args_options opts
+        # cache or spawn
+        cache_key = command+' '+args.join(' ')+'  #'+
+            [" #{k}: #{v}" for k,v of options]
+        # TODO cache lookup
+        # spawn and pipe through BufferStream
+        debug_log 'spawn:', cache_key
+        buffer = new BufferStream
+        child = spawn command, args, options
+        child.stderr.on 'data', options.onstderr or debug_log
+
+        p = exiting: false
+        onprocess_exit = ->
+            p.exiting = true
+            child.kill()
+        process.once 'exit', onprocess_exit
+        child.on 'exit', () ->
+            process.removeListener 'exit', onprocess_exit
+            delete child
+            if !p.exiting
+                options.onchild_exit?()
+
+        child.stdout.pipe buffer
+        @output buffer, options.chunked, options.parser, cb
+
+    split_args_options: (opts) =>
         # split into args and filtered options
         args = []
         options = {}
         special = ['cwd', 'env', 'customFds', 'setsid', 'chunked', 'parser',
-            'caching']
+            'caching', 'onstderr', 'onchild_exit']
         i = 0 # i am pushing stuff into opts inside the loop, thats why i need i
         while i < opts.length
             arg = opts[i]
@@ -191,21 +217,7 @@ class Git
             else unless typeof arg is 'undefined'
                 throw Error "wrong arg #{arg} in opts"
             i++
-        # cache or spawn
-        cache_key = command+' '+args.join(' ')+'  #'+
-            [" #{k}: #{v}" for k,v of options]
-        # TODO cache lookup
-        # spawn and pipe through BufferStream
-        debug_log 'spawn:', cache_key
-        buffer = new BufferStream
-        child = spawn command, args, options
-        child.stderr.on 'data', debug_log
-        process.once 'exit', child.kill
-        child.on 'exit', () ->
-            process.removeListener 'exit', child.kill
-            delete child
-        child.stdout.pipe buffer
-        @output buffer, options.chunked, options.parser, cb
+        [args, options]
 
     opts_cb: (opts, cb) =>
         opts ?= []
@@ -217,11 +229,26 @@ class Git
 
     output: (buffer, chunked, parser, cb) =>
         if chunked
-            throw 'you cant use a parser in chunked mode!' if parser
-            if cb
-                buffer.on 'close', () -> cb buffer.buffer
+            if parser
+                stream = new Stream
+                stream.setEncoding 'utf8'
+                buffer.split '\n', (l,t) ->
+                    item = parser.line l.toString()
+                    (stream.emit 'data', JSON.stringify(item)) if item
+                buffer.on 'close', ->
+                    item = parser.end()
+                    (stream.emit 'data', JSON.stringify(item)) if item
+                    stream.emit 'close'
+                #if cb
+                #    items = []
+                #    stream.on 'item', (item) -> items.push item
+                #    stream.on 'close', -> cb items
+                return stream
             else
-                buffer.disable()
+                if cb
+                    buffer.on 'close', () -> cb buffer.buffer
+                else
+                    buffer.disable()
         else
             if parser
                 # extra EventEmitter needed to circumvent emitting 'close'
