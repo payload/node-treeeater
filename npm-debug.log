@@ -1,0 +1,30 @@
+info it worked if it ends with ok
+verbose cli [ 'node', '/usr/local/bin/npm', 'test' ]
+info using npm@1.0.8
+info using node@v0.4.8
+verbose config file /home/payload/.npmrc
+verbose config file /usr/local/etc/npmrc
+verbose has wscript [ undefined,
+verbose has wscript   { file: '/home/payload/code/js/treeeater/package.json',
+verbose has wscript     contributors: false,
+verbose has wscript     serverjs: false,
+verbose has wscript     wscript: true } ]
+ERR! Error: Invalid version: 0.75
+ERR! Must be X.Y.Z, with an optional trailing tag.
+ERR! See the section on 'version' in `npm help json`
+ERR!     at /usr/local/lib/node_modules/npm/lib/utils/read-json.js:255:13
+ERR!     at /usr/local/lib/node_modules/npm/lib/utils/read-json.js:132:32
+ERR!     at P (/usr/local/lib/node_modules/npm/lib/utils/read-json.js:109:40)
+ERR!     at cb (/usr/local/lib/node_modules/npm/lib/utils/graceful-fs.js:31:9)
+ERR!     at [object Object].<anonymous> (fs.js:107:5)
+ERR!     at [object Object].emit (events.js:61:17)
+ERR!     at afterRead (fs.js:878:12)
+ERR!     at wrapper (fs.js:245:17)
+ERR! Report this *entire* log at:
+ERR!     <http://github.com/isaacs/npm/issues>
+ERR! or email it to:
+ERR!     <npm-@googlegroups.com>
+ERR! 
+ERR! System Linux 2.6.35-28-generic
+ERR! command "node" "/usr/local/bin/npm" "test"
+verbose exit [ 1, true ]
