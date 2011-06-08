@@ -312,12 +312,12 @@ class CommitsParser extends ItemsParser
             @item.tree = match[1]]
         [/^parent ([0-9a-z]+)/, (match) ->
             (@item.parents ?= []).push match[1]]
-        [/^author (\S+) (\S+) (\d+) (\S+)/, (match) ->
+        [/^author (.+) (\S+) (\d+) (\S+)/, (match) ->
             # TODO take timezone into account
             [ _, name, email, secs, timezone ] = match
             date = new Date secs * 1000
             @item.author = { name, email, date }]
-        [/^committer (\S+) (\S+) (\d+) (\S+)/, (match) ->
+        [/^committer (.+) (\S+) (\d+) (\S+)/, (match) ->
             # TODO take timezone into account
             [ _, name, email, secs, timezone ] = match
             date = new Date secs * 1000
