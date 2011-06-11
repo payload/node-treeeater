@@ -10,8 +10,10 @@ debug_log = (what...) ->
 
 class Git
     constructor: (@opts) ->
+        @git_commands = []
         for cmd in git_commands
             func = cmd.replace /-/g, '_'
+            @git_commands.push func
             this[func] = do (cmd) => (opts..., cb) =>
                 [opts, cb] = @opts_cb opts, cb
                 @spawn 'git', c: 'color.ui=never', cmd, opts, cb
@@ -166,6 +168,7 @@ class Git
     # [cb]: (string) -> # gets all the text
     # returns: EventEmitter line: string, end
     spawn: (command, opts..., cb) =>
+        # t0 = (new Date()).getTime()
         [opts, cb] = @opts_cb opts, cb
         [args, options] = @split_args_options opts
         # cache or spawn
@@ -190,7 +193,9 @@ class Git
                 options.onchild_exit?()
 
         child.stdout.pipe buffer
-        @output buffer, options.chunked, options.parser, cb
+        buf = @output buffer, options.chunked, options.parser, cb
+        #buf.on 'close', -> console.log((new Date()).getTime() - t0)
+        buf
 
     split_args_options: (opts) =>
         # split into args and filtered options
