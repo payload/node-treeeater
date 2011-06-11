@@ -18,7 +18,16 @@ class Git
                 [opts, cb] = @opts_cb opts, cb
                 @spawn 'git', c: 'color.ui=never', cmd, opts, cb
 
+    # this is an internal and is used to convert every option you give to
+    # a function into a command line option
     #
+    # key: value → --key=value
+    # key: null  → --key
+    # if key is only one character
+    # k: value   → -k value
+    # k: null    → -k
+    # if key is an empty string
+    # '': null   → --
     opts2args: (opts) =>
         args = []
         for k,v of opts
