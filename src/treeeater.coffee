@@ -9,11 +9,10 @@ debug_log = (what...) ->
     console.log 'DEBUG:', (""+x for x in what).join(' ')
 
 class Git
+    git_commands: [cmd.replace /-/g, '_' for cmd in git_commands]
+
     constructor: (@opts) ->
-        @git_commands = []
-        for cmd in git_commands
-            func = cmd.replace /-/g, '_'
-            @git_commands.push func
+        for func in @git_commands
             this[func] = do (cmd) => (opts..., cb) =>
                 [opts, cb] = @opts_cb opts, cb
                 @spawn 'git', c: 'color.ui=never', cmd, opts, cb
@@ -236,6 +235,8 @@ class Git
             i++
         [args, options]
 
+    # puts default @opts into opts and
+    # puts cb into opts if it isn't a function
     opts_cb: (opts, cb) =>
         opts ?= []
         opts.push @opts
@@ -244,29 +245,12 @@ class Git
             cb = undefined
         [opts, cb]
 
+    # fiddels out what to return how
     output: (buffer, chunked, parser, cb) =>
         parser = new Parsers[parser] if typeof parser is 'string'
         if chunked
             if parser
-                stream = new Stream
-                first_time = yes
-                buffer.split '\n', (l,t) ->
-                    item = parser.line l.toString()
-                    data = ""
-                    data += "[" if first_time
-                    if item
-                        data += JSON.stringify(item) + ","
-                    (stream.emit 'data', data) if item or first_time
-                    first_time = no if first_time
-                buffer.on 'close', ->
-                    item = parser.end()
-                    (stream.emit 'data', JSON.stringify(item) + "]") if item
-                    stream.emit 'close'
-                #if cb
-                #    items = []
-                #    stream.on 'item', (item) -> items.push item
-                #    stream.on 'close', -> cb items
-                return stream
+                return @output_chunked_parser(buffer, parser, cb) # a stream
             else
                 if cb
                     buffer.on 'close', () -> cb buffer.buffer
@@ -274,21 +258,7 @@ class Git
                     buffer.disable()
         else
             if parser
-                # extra EventEmitter needed to circumvent emitting 'close'
-                # earlier than the last emit 'item'
-                ee = new EventEmitter
-                buffer.split '\n', (l,t) ->
-                    item = parser.line l.toString()
-                    (ee.emit 'item', item) if item
-                buffer.on 'close', ->
-                    item = parser.end()
-                    (ee.emit 'item', item) if item
-                    ee.emit 'close'
-                if cb
-                    items = []
-                    ee.on 'item', (item) -> items.push item
-                    ee.on 'close', -> cb items
-                return ee
+                return @output_unchunked_parser(buffer, parser, cb) # items
             else
                 buffer.split '\n', (l,t) -> buffer.emit 'item', l.toString()
                 if cb
@@ -296,6 +266,46 @@ class Git
                     buffer.on 'item', (item) -> items.push item
                     buffer.on 'close', -> cb items
         buffer
+
+    # actually a stream
+    output_chunked_parser: (buffer, parser, cb) =>
+        stream = new Stream
+        first_time = yes
+        buffer.split '\n', (l,t) ->
+            item = parser.line l.toString()
+            data = ""
+            data += "[" if first_time
+            if item
+                data += JSON.stringify(item) + ","
+            (stream.emit 'data', data) if item or first_time
+            first_time = no if first_time
+        buffer.on 'close', ->
+            item = parser.end()
+            (stream.emit 'data', JSON.stringify(item) + "]") if item
+            stream.emit 'close'
+        #if cb
+        #    items = []
+        #    stream.on 'item', (item) -> items.push item
+        #    stream.on 'close', -> cb items
+        stream
+
+    # items
+    output_unchunked_parser: (buffer, parser, cb) =>
+        # extra EventEmitter needed to circumvent emitting 'close'
+        # earlier than the last emit 'item'
+        ee = new EventEmitter
+        buffer.split '\n', (l,t) ->
+            item = parser.line l.toString()
+            (ee.emit 'item', item) if item
+        buffer.on 'close', ->
+            item = parser.end()
+            (ee.emit 'item', item) if item
+            ee.emit 'close'
+        if cb
+            items = []
+            ee.on 'item', (item) -> items.push item
+            ee.on 'close', -> cb items
+        ee
 
 # see CommitsParser to see an example of the usage
 # a possible error in usage is a wrong regex at index 0 which results surely in
