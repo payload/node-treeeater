@@ -18,6 +18,7 @@ class Git
                 [opts, cb] = @opts_cb opts, cb
                 @spawn 'git', c: 'color.ui=never', cmd, opts, cb
 
+    #
     opts2args: (opts) =>
         args = []
         for k,v of opts
@@ -141,7 +142,8 @@ class Git
         ee
 
     # cat               # cats the content of an blob as a Buffer
-    # treeish: path/{revision: path} # default revision is HEAD
+    # treeish           # a string which is a path, revision will be HEAD
+    #                   # or a object of the form { revision: path }
     # opts...           # git cat-file options
     cat: (treeish, opts..., cb) =>
         if typeof treeish == 'string'
