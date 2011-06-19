@@ -1,4 +1,4 @@
-Git = require 'treeeater'
+{ Git, RawGit, NiceGit } = require 'treeeater'
 
 # i know my tests are no tests. nor good, not complete neither helpfull :P
 
@@ -15,11 +15,12 @@ test_commits = () ->
         if result.a and result.b
             assert_same result.a, result.b, 'serving and counting commits'
     commits = git.commits (commits) ->
+        console.log "callback!"
         result.a = commits.length
         check()
-    commits.on 'item', (commit) ->
+    commits.on 'data', (commit) ->
         n += 1
-    commits.on 'close', ->
+    commits.on 'end', ->
         result.b = n
         check()
 
@@ -52,14 +53,28 @@ test_commit_tree_hierachy = () ->
             if blob.type == 'blob'
                 todo += 1
         blobs = git.commit_tree_hierachy git.tree_hierachy(trees)
-        blobs.on 'item', (blob) ->
+        blobs.on 'data', (blob) ->
             todo -= 1
-        blobs.on 'close', ->
+        blobs.on 'end', ->
             assert_same todo, 0, 'commit tree hierachy'
 
+test_status = () ->
+    git = new RawGit
+    ee = git.status {}
+    ee.on 'data', (x) ->
+        x = "#{x}"
+        console.log "git status okay" if x.length > 10
+    ee.on 'end', -> console.log "git status finished"
+
+test_branch = () ->
+    git = new Git
+    git.branch (x) -> console.log "#{x}"
+
+test_status()
 test_commits()
 test_trees()
 test_cat()
 test_diffs()
 test_commit_tree_hierachy()
+test_branch()
 

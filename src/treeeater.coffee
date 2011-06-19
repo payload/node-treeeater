@@ -1,21 +1,53 @@
 { spawn } = require 'child_process'
 Stream = (require 'stream').Stream
 BufferStream = require 'bufferstream'
-EventEmitter = (require 'events').EventEmitter
+#EventEmitter = (require 'events').EventEmitter
+{ Stream } = require 'stream'
 git_commands = (require './git-commands.js').commands
 Path = require 'path'
+
+# see NiceGit and Git below ^^
 
 debug_log = (what...) ->
     console.log 'DEBUG:', (""+x for x in what).join(' ')
 
-class Git
-    git_commands: [cmd.replace /-/g, '_' for cmd in git_commands]
+obj_merge = (objs...) ->
+    o = {}
+    for obj in objs
+        for k,v of obj
+            o[k] = v
+    o
 
-    constructor: (@opts) ->
-        for func in @git_commands
-            this[func] = do (cmd) => (opts..., cb) =>
-                [opts, cb] = @opts_cb opts, cb
-                @spawn 'git', c: 'color.ui=never', cmd, opts, cb
+split_args_options_cb = (opts) =>
+    # split into args, filtered options and a callback
+    if typeof opts[-1..][0] is 'function'
+        cb = opts.pop()
+    args = []
+    options = {}
+    special = ['cwd', 'env', 'customFds', 'setsid', 'buffer', 'parser',
+        'json', 'onstderr', 'onchild_exit']
+    for x in opts
+        if typeof x == 'object'
+            filtered = {}
+            for k, v of x
+                if k in special
+                    options[k] = v
+                else
+                    filtered[k] = v
+            args.push filtered
+        else args.push x
+    { args, options, cb }
+
+# these provides the git commands which you know from the cmd line
+class RawGit
+    commands: (cmd.replace /-/g, '_' for cmd in git_commands)
+
+    # every git command is called like git.status args..., options
+    constructor: () ->
+        for func in @commands
+            this[func] = do (func) => (args..., options) =>
+                @spawn 'git', { c: 'color.ui=never' }, func.replace(/_/g, '-'),
+                    args..., options
 
     # this is an internal and is used to convert every option you give to
     # a function into a command line option
@@ -27,9 +59,9 @@ class Git
     # k: null    → -k
     # if key is an empty string
     # '': null   → --
-    opts2args: (opts) =>
+    obj2cmdline: (obj) =>
         args = []
-        for k,v of opts
+        for k,v of obj
             if k.length > 1
                 if v != null
                     args.push "--#{k}=#{v}"
@@ -44,34 +76,95 @@ class Git
             else args.push "--"
         args
 
+    args2cmdline: (args) =>
+        cmdline = []
+        for arg in args
+            if typeof arg is 'object'
+                cmdline = cmdline.concat @obj2cmdline(arg)
+            else
+                cmdline.push "#{arg}"
+        cmdline
+
+    # spawn             # mostly like child_process.spawn
+    # command: string
+    # args: [...]       # args which get translated to cmdline args
+    # options: object   # holds special options for child_process.spawn#options
+                        # and RawGit related special options
+    spawn: (command, args..., options) =>
+        # t0 = (new Date()).getTime()
+        args = @args2cmdline args
+        spawn_cmd = command+' '+args.join(' ')+'  #'+
+            [" #{k}: #{v}" for k,v of options]
+        debug_log 'spawn:', spawn_cmd
+        buffer = new BufferStream
+        # spawn and pipe through BufferStream
+        child = spawn command, args, options
+        child.stdout.pipe buffer
+        child.stderr.on 'data', options.onstderr or debug_log
+        @exit_handling child, options
+        buf = @output buffer, options
+        #buf.on 'close', -> console.log((new Date()).getTime() - t0)
+        buf
+
+    exit_handling: (child, options) =>
+        p = exiting: false
+        onprocess_exit = ->
+            p.exiting = true
+            child.kill()
+        process.once 'exit', onprocess_exit
+        child.on 'exit', () ->
+            process.removeListener 'exit', onprocess_exit
+            delete child
+            if !p.exiting
+                options.onchild_exit?()
+
+    # returns an event emitter which outputs via 'data'
+    # * raw data       # Buffer
+    # * parsed objects # parser specific type, if options.parser
+    # * both as JSON   # String, if options.json
+    # * JSON as Buffer # Buffer, if options.json and .buffered
+    output: (buffer, options) =>
+        { parser, json, buffered } = options
+        parser = new Parsers[parser] if typeof parser is 'string'
+        maybe_buffered = (x) => if buffered then new Buffer(x) else x
+        ee = new Stream
+        if parser
+            buffer.split parser.splitter, (x,t) -> parser.chunk x
+            buffer.on 'close', -> parser.end()
+            parser.on 'item', (x) ->
+                x = JSON.stringify(x) if json or buffered
+                x = maybe_buffered x
+                ee.emit 'data', x
+            parser.on 'end', -> ee.emit 'end'
+        else
+            buffer.disable()
+            buffer.on 'data', (x) ->
+                x = maybe_buffered '"'+x.toString()+'"' if json
+                ee.emit 'data', x
+            buffer.on 'end', -> ee.emit 'end'
+        ee
+
+class NiceGit extends RawGit
     # version # returns the git version string
-    # opts... # git --version options
-    version: (opts..., cb) =>
-        [opts, cb] = @opts_cb opts, cb
-        @spawn 'git', '--version', opts, cb
+    # args... # git --version args...
+    version: (args..., options) =>
+        @spawn 'git', '--version', args..., options
 
     # commits             # serves commits as parsed from git log
-    # opts...             # git log options
-    # [cb]: ([object]) -> # gets all the commits
-    # returns: EventEmitter commit: object, end
-    commits: (opts..., cb) =>
-        [opts, cb] = @opts_cb opts, cb
-        @log opts,
+    # args...             # git log args...
+    commits: (args..., options) =>
+        myargs =
             raw: null
             pretty: 'raw'
             numstat: null
             'no-color': null
             'no-abbrev': null
-            parser: 'commit'
-            , cb
+        @log args..., myargs, obj_merge(options, parser: 'commit')
 
-    # tree                # opts should contain a revision like HEAD
-    # opts...             # git ls-tree options
-    # [cb]: ([object]) -> # gets all the tree objects
-    # returns: EventEmitter tree: object, end
-    trees: (opts..., cb) =>
-        [opts, cb] = @opts_cb opts, cb
-        @ls_tree '-l', '-r', '-t', opts, parser: 'tree', cb
+    # tree                # args should contain a revision like HEAD
+    # args...             # git ls-tree args...
+    trees: (args..., options) =>
+        @ls_tree '-l', '-r', '-t', args..., obj_merge(options, parser: 'tree')
 
     # tree_hierachy
     # transforms the output of @tree into a correct tree hierachy
@@ -117,204 +210,89 @@ class Git
             # we are in an infinite loop, so we through an error after we have
             # seen too much ^^
             if !(n -= 1) and trees.length
-                throw new Error "#{Path.dirname(trees[0].path)} missing #{n} #{trees.length}"
+                msg = "tree_hierachy: path '#{Path.dirname(trees[0].path)}' "+
+                    "missing #{n} #{trees.length}"
+                throw new Error msg
         hierachy
 
     # commit_tree_hierachy      # annotates blobs with corresponding commits
     #                             in a tree_hierachy INPLACE
     # tree_hierachy             # the return of tree_hierachy
-    # opts...                   # @commits options
-    # [cb]: (tree_hierachy) ->  # gets the tree_hierachy
-    # returns: EventEmitter blob: object, end # emits newly annotated blob
-    commit_tree_hierachy: (tree_hierachy, opts..., cb) =>
-        [ opts, cb ] = @opts_cb opts, cb
+    # args...                   # @commits args...
+    commit_tree_hierachy: (tree_hierachy, args..., options) =>
         todo = 0
         blobs = {}
         for path, blob of tree_hierachy.all
             continue if blob.type != 'blob'
             blobs[path] = blob
             todo += 1
-        ee = new EventEmitter
-        commits = @commits opts
-        commits.on 'item', (commit) =>
+        ee = new Stream
+        commits = @commits args..., options
+        commits.on 'data', (commit) =>
             if todo
                 for path of commit.changes
                     if path of blobs
                         blobs[path].commit = commit
-                        ee.emit 'item', blobs[path]
+                        ee.emit 'data', blobs[path]
                         delete blobs[path]
                         todo -= 1
-        commits.on 'close', =>
-            ee.emit 'close'
-            cb? tree_hierachy
+        commits.on 'end', => ee.emit 'end'
         ee
 
     # cat               # cats the content of an blob as a Buffer
     # treeish           # a string which is a path, revision will be HEAD
     #                   # or a object of the form { revision: path }
-    # opts...           # git cat-file options
-    cat: (treeish, opts..., cb) =>
+    # args...           # git cat-file args...
+    cat: (treeish, args..., options) =>
         if typeof treeish == 'string'
             path = treeish
             revision = 'HEAD'
         else for k, v of treeish
             path = v
             revision = k
-        [ opts, cb ] = @opts_cb opts, cb
-        @cat_file '-p', opts, "#{revision}:#{path}", chunked: true, cb
+        @cat_file '-p', args..., "#{revision}:#{path}",
+            obj_merge(options)
 
     # diffs             # returns diff objects
-    # opts...           # git diff options
-    diffs: (opts..., cb) =>
-        [opts, cb] = @opts_cb opts, cb
+    # args...           # git diff args...
+    diffs: (args..., options) =>
         # TODO when the parser supports it: --full-index
-        @diff 'no-color': null, opts, parser: 'diff', cb
+        @diff { 'no-color': null }, args..., obj_merge(options, parser: 'diff')
 
-    # spawn             # mostly like child_process.spawn
-    # command: string
-    # opts: [...]       # command options and special options like
-                        # documented in child_process.spawn#options
-                        # or { chunked: true } to disable line splits
-    # [cb]: (string) -> # gets all the text
-    # returns: EventEmitter line: string, end
-    spawn: (command, opts..., cb) =>
-        # t0 = (new Date()).getTime()
-        [opts, cb] = @opts_cb opts, cb
-        [args, options] = @split_args_options opts
-        # cache or spawn
-        cache_key = command+' '+args.join(' ')+'  #'+
-            [" #{k}: #{v}" for k,v of options]
-        # TODO cache lookup
-        # spawn and pipe through BufferStream
-        debug_log 'spawn:', cache_key
-        buffer = new BufferStream
-        child = spawn command, args, options
-        child.stderr.on 'data', options.onstderr or debug_log
+class Git
+    no_git: ['constructor', 'git_commands', 'tree_hierachy']
 
-        p = exiting: false
-        onprocess_exit = ->
-            p.exiting = true
-            child.kill()
-        process.once 'exit', onprocess_exit
-        child.on 'exit', () ->
-            process.removeListener 'exit', onprocess_exit
-            delete child
-            if !p.exiting
-                options.onchild_exit?()
+    # TODO öhm, bäh
+    constructor: (@options) ->
+        nice_git = new NiceGit
+        @tree_hierachy = nice_git.tree_hierachy
+        funcs = [].concat RawGit.commands
+        for own k of nice_git
+            funcs.push k unless k in @no_git
+        @commands = [].concat funcs
 
-        child.stdout.pipe buffer
-        buf = @output buffer, options.chunked, options.parser, cb
-        #buf.on 'close', -> console.log((new Date()).getTime() - t0)
-        buf
-
-    split_args_options: (opts) =>
-        # split into args and filtered options
-        args = []
-        options = {}
-        special = ['cwd', 'env', 'customFds', 'setsid', 'chunked', 'parser',
-            'caching', 'onstderr', 'onchild_exit']
-        i = 0 # i am pushing stuff into opts inside the loop, thats why i need i
-        while i < opts.length
-            arg = opts[i]
-            # to mix single strings and arrays in the arguments
-            if Array.isArray(arg)
-                opts.push.apply opts, arg # thats the pushing i is needed for
-            else if typeof arg == 'object'
-                # the options filter for special options
-                filtered = {}
-                for k, v of arg
-                    if k in special
-                        options[k] = v
-                    else
-                        filtered[k] = v
-                args = args.concat @opts2args(filtered)
-            else if typeof arg is 'string'
-                args.push arg
-            else unless typeof arg is 'undefined'
-                throw Error "wrong arg #{arg} in opts"
-            i++
-        [args, options]
-
-    # puts default @opts into opts and
-    # puts cb into opts if it isn't a function
-    opts_cb: (opts, cb) =>
-        opts ?= []
-        opts.push @opts
-        if typeof cb != 'function'
-            opts.push cb
-            cb = undefined
-        [opts, cb]
-
-    # fiddels out what to return how
-    output: (buffer, chunked, parser, cb) =>
-        parser = new Parsers[parser] if typeof parser is 'string'
-        if chunked
-            if parser
-                return @output_chunked_parser(buffer, parser, cb) # a stream
-            else
+        for func in funcs
+            this[func] = do (func) => (opts...) =>
+                { args, options, cb } = split_args_options_cb opts
+                ee = nice_git[func](args..., obj_merge(@options, options))
                 if cb
-                    buffer.on 'close', () -> cb buffer.buffer
-                else
-                    buffer.disable()
-        else
-            if parser
-                return @output_unchunked_parser(buffer, parser, cb) # items
-            else
-                buffer.split '\n', (l,t) -> buffer.emit 'item', l.toString()
-                if cb
-                    items = []
-                    buffer.on 'item', (item) -> items.push item
-                    buffer.on 'close', -> cb items
-        buffer
-
-    # actually a stream
-    output_chunked_parser: (buffer, parser, cb) =>
-        stream = new Stream
-        first_time = yes
-        buffer.split '\n', (l,t) ->
-            item = parser.line l.toString()
-            data = ""
-            data += "[" if first_time
-            if item
-                data += JSON.stringify(item) + ","
-            (stream.emit 'data', data) if item or first_time
-            first_time = no if first_time
-        buffer.on 'close', ->
-            item = parser.end()
-            (stream.emit 'data', JSON.stringify(item) + "]") if item
-            stream.emit 'close'
-        #if cb
-        #    items = []
-        #    stream.on 'item', (item) -> items.push item
-        #    stream.on 'close', -> cb items
-        stream
-
-    # items
-    output_unchunked_parser: (buffer, parser, cb) =>
-        # extra EventEmitter needed to circumvent emitting 'close'
-        # earlier than the last emit 'item'
-        ee = new EventEmitter
-        buffer.split '\n', (l,t) ->
-            item = parser.line l.toString()
-            (ee.emit 'item', item) if item
-        buffer.on 'close', ->
-            item = parser.end()
-            (ee.emit 'item', item) if item
-            ee.emit 'close'
-        if cb
-            items = []
-            ee.on 'item', (item) -> items.push item
-            ee.on 'close', -> cb items
-        ee
+                    accu = []
+                    ee.on 'data', (x) -> accu.push x
+                    ee.on 'end', -> cb accu
+                ee
 
 # see CommitsParser to see an example of the usage
 # a possible error in usage is a wrong regex at index 0 which results surely in
 # a TypeError cause of setting a property of null
-class ItemsParser
-    constructor: (@regexes) ->
+class ItemsParser extends Stream
+    constructor: (@regexes = []) ->
         @item = null
-    end: () => @item unless @no_match
-    line: (line) =>
+        @splitter = '\n'
+    end: () =>
+        @emit 'item', @item unless @no_match
+        @emit 'end'
+    chunk: (line) =>
+        line = "#{line}"
         return_item = null
         matched = false
         for [ regex, func ], i in @regexes
@@ -322,15 +300,14 @@ class ItemsParser
             if match
                 matched = true
                 if i == 0
-                    return_item = @item
+                    @emit 'item', @item if @item
                     @item = {}
                 func.call this, match
         unless matched
             debug_log "ItemsParser.line - unknown line:", line
-        return_item
 
 class CommitsParser extends ItemsParser
-    constructor: () -> @regexes = regexes
+    constructor: () -> super regexes
     regexes = [
         [/^commit ([0-9a-z]+)/, (match) ->
             @item.sha = match[1]]
@@ -361,14 +338,14 @@ class CommitsParser extends ItemsParser
     ]
 
 class TreesParser extends ItemsParser
-    constructor: () -> @regexes = regexes
+    constructor: () -> super regexes
     regexes = [
-        [/^(\S+) (\S+) (\S+)\s+(\S+)\s+(.+)/, (match) ->
+        [/^(\S+) (\S+) (\S+)\s+(\S+)\t(.+)/, (match) ->
             [ _, mode, type, sha, size, path ] = match
             @item = { mode, type, sha, size, path }]]
 
 class DiffsParser extends ItemsParser
-    constructor: () -> @regexes = regexes
+    constructor: () -> super regexes
     set_by_list: (names..., match) ->
         for name, i in names
             @item[name] = match[i] if name
@@ -389,5 +366,5 @@ Parsers =
     tree: TreesParser
     diff: DiffsParser
 
-module.exports = Git
+module.exports = { Git, RawGit, NiceGit }
 
