@@ -5,7 +5,7 @@
   "description": "useing git with focus on fun or something like that!",
   "keywords": ["git"],
   "main": "./build/default/treeeater.js",
-  "version": "0.9375.0",
+  "version": "0.96875.0",
   "homepage": "https://github.com/payload/node-treeeater",
   "repository": {
     "type": "git",
