@@ -96,7 +96,7 @@ class RawGit
         spawn_cmd = command+' '+args.join(' ')+'  #'+
             [" #{k}: #{v}" for k,v of options]
         debug_log 'spawn:', spawn_cmd
-        buffer = new BufferStream
+        buffer = new BufferStream size:'flexible'
         # spawn and pipe through BufferStream
         child = spawn command, args, options
         child.stdout.pipe buffer
@@ -137,7 +137,7 @@ class RawGit
                 ee.emit 'data', x
             parser.on 'end', -> ee.emit 'end'
         else
-            buffer.disable()
+            buffer.setSize('none')
             buffer.on 'data', (x) ->
                 x = maybe_buffered '"'+x.toString()+'"' if json
                 ee.emit 'data', x
