@@ -352,9 +352,10 @@ class DiffsParser extends ItemsParser
     regexes = [
         [/^diff (.+) a\/(.+) b\/(.+)/, (match) ->
             @set_by_list null, 'type', 'src', 'dst', match]
-        [/^@@ -(\d+),(\d+) \+(\d+),(\d+) @@(.*)$/, (match) ->
-            [ _, a, b, c, d, e ] = match
-            (@item.chunks ?= []).push { head: [a,b,c,d,e], lines: [] }]
+        [/^@@ -(\d+),(\d+) \+(\d+),(\d+) @@ ?(.*)$/, (match) ->
+            [ line, a_start, a_end, b_start, b_end, beginning ] = match
+            head = { line, a_start, a_end, b_start, b_end, beginning }
+            (@item.chunks ?= []).push { head, lines: [] }]
         [/^([ \-+])(.*)/, (match) ->
             line = type: match[1], line: match[2]
             # "?" is a fix for "+++"/"---" lines in the header
