@@ -352,7 +352,7 @@ class DiffsParser extends ItemsParser
     regexes = [
         [/^diff (.+) a\/(.+) b\/(.+)/, (match) ->
             @set_by_list null, 'type', 'src', 'dst', match]
-        [/^@@ -(\d+),(\d+) +(\d+),(\d+) @@.*$/, (match) ->
+        [/^@@ -(\d+),(\d+) \+(\d+),(\d+) @@.*$/, (match) ->
             [ _, a, b, c, d ] = match
             (@item.chunks ?= []).push { head: [a,b,c,d], lines: [] }]
         [/^([ \-+])(.*)/, (match) ->
