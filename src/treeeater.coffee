@@ -165,7 +165,7 @@ class NiceGit extends RawGit
     # tree                # args should contain a revision like HEAD
     # args...             # git ls-tree args...
     trees: (args..., options) =>
-        @ls_tree '-l', '-r', '-t', args..., obj_merge(options, parser: 'tree')
+        @ls_tree '-l', '-t', args..., obj_merge(options, parser: 'tree')
 
     # tree_hierachy
     # transforms the output of @tree into a correct tree hierachy
