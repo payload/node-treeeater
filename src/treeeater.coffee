@@ -129,19 +129,20 @@ class RawGit
         maybe_buffered = (x) => if buffered then new Buffer(x) else x
         ee = new Stream
         if parser
-            buffer.split parser.splitter, (x,t) -> parser.chunk x
             buffer.on 'close', -> parser.end()
             parser.on 'item', (x) ->
                 x = JSON.stringify(x) if json or buffered
                 x = maybe_buffered x
                 ee.emit 'data', x
             parser.on 'end', -> ee.emit 'end'
+            buffer.split parser.splitter, (x,t) -> parser.chunk x
         else
-            buffer.setSize('none')
             buffer.on 'data', (x) ->
                 x = maybe_buffered '"'+x.toString()+'"' if json
                 ee.emit 'data', x
             buffer.on 'end', -> ee.emit 'end'
+            buffer.disable()
+            buffer.setSize('none')
         ee
 
 class NiceGit extends RawGit
