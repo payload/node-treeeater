@@ -5,18 +5,18 @@
   "description": "useing git with focus on fun or something like that!",
   "keywords": ["git"],
   "main": "./build/default/treeeater.js",
-  "version": "0.96875.0",
+  "version": "0.96875.1",
   "homepage": "https://github.com/payload/node-treeeater",
   "repository": {
     "type": "git",
     "url": "git://github.com/payload/node-treeeater.git"
   },
   "engines": {
-    "node": ">= 0.4.7"
+    "node": "*"
   },
   "dependencies": {
-    "coffee-script": ">= 1.1.1",
-    "bufferstream": ">= 0.1.2"
+    "coffee-script": "*",
+    "bufferstream": "*"
   },
   "devDependencies": {},
   "scripts": {
